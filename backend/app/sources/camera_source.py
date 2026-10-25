@@ -2,6 +2,7 @@ import time
 import threading
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, Tuple
 import cv2
 import numpy as np
@@ -50,11 +51,21 @@ class CameraSourceWorker:
         while self._running:
             # Handle integer webcam index if digits provided
             src = int(self.source_ref) if self.source_ref.isdigit() else self.source_ref
+
+            # Resolve relative file paths to repository root if not found in current directory
+            if isinstance(src, str) and not src.startswith(("rtsp://", "http://", "https://")):
+                p = Path(src)
+                if not p.is_absolute() and not p.exists():
+                    repo_root = Path(__file__).resolve().parent.parent.parent.parent
+                    candidate = repo_root / src
+                    if candidate.exists():
+                        src = str(candidate)
+
             cap = cv2.VideoCapture(src)
 
             if not cap.isOpened():
                 self.status = "DEGRADED"
-                logger.warning(f"Failed to open source '{self.source_ref}'. Retrying in {self.reconnect_backoff_sec}s...")
+                logger.warning(f"Failed to open source '{src}'. Retrying in {self.reconnect_backoff_sec}s...")
                 time.sleep(self.reconnect_backoff_sec)
                 continue
 
