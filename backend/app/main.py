@@ -8,6 +8,9 @@ from app.api.routes import cameras, analytics, events
 from app.api import ws
 
 
+from app.core.lifecycle import lifecycle_manager
+
+
 class HealthResponse(BaseModel):
     status: str
     model_loaded: bool
@@ -17,9 +20,11 @@ class HealthResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: initialize database, verify configurations
+    # Startup: launch background sampling loop and worker management
+    lifecycle_manager.start_manager()
     yield
     # Shutdown: clean up workers and connections
+    lifecycle_manager.stop_manager()
 
 
 app = FastAPI(

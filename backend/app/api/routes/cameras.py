@@ -29,10 +29,10 @@ _cameras_store: Dict[str, dict] = {
     "cam_01": {
         "camera_id": "cam_01",
         "name": "Platform A - North Concourse",
-        "source_ref": "data/sample_platform_a.mp4",
-        "status": "ANALYSIS_ACTIVE",
-        "last_sampled_at": datetime.now(timezone.utc),
-        "sample_age_ms": 68
+        "source_ref": "data/sample_platform.mp4",
+        "status": "STOPPED",
+        "last_sampled_at": None,
+        "sample_age_ms": None
     }
 }
 
@@ -75,6 +75,9 @@ def get_camera(camera_id: str):
     return _cameras_store[camera_id]
 
 
+from app.core.lifecycle import lifecycle_manager
+
+
 @router.post("/{camera_id}/start", status_code=status.HTTP_202_ACCEPTED)
 def start_camera(camera_id: str):
     """Starts camera ingest worker and 1 Hz randomized frame sampling."""
@@ -83,6 +86,8 @@ def start_camera(camera_id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Camera '{camera_id}' not found."
         )
+    source_ref = _cameras_store[camera_id]["source_ref"]
+    lifecycle_manager.start_camera(camera_id, source_ref)
     _cameras_store[camera_id]["status"] = "ANALYSIS_ACTIVE"
     return {"message": f"Camera '{camera_id}' started", "status": "ANALYSIS_ACTIVE"}
 
@@ -95,6 +100,7 @@ def stop_camera(camera_id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Camera '{camera_id}' not found."
         )
+    lifecycle_manager.stop_camera(camera_id)
     _cameras_store[camera_id]["status"] = "STOPPED"
     return {"message": f"Camera '{camera_id}' stopped", "status": "STOPPED"}
 
@@ -107,6 +113,11 @@ def get_camera_snapshot(camera_id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Camera '{camera_id}' not found."
         )
+
+    # Return live snapshot from memory if camera is actively running
+    live_snapshot = lifecycle_manager.get_snapshot(camera_id)
+    if live_snapshot is not None:
+        return live_snapshot
 
     now = datetime.now(timezone.utc)
     return AnalyticsSnapshot(
@@ -129,12 +140,17 @@ def get_camera_snapshot(camera_id: str):
 
 @router.get("/{camera_id}/frame.jpg")
 def get_camera_frame(camera_id: str):
-    """Returns the most recently analyzed frame JPEG image (dummy 1x1 jpeg for contract tests)."""
+    """Returns the most recently analyzed frame JPEG image."""
     if camera_id not in _cameras_store:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Camera '{camera_id}' not found."
         )
-    # Minimal 1x1 pixel valid JPEG bytes
+
+    live_jpeg = lifecycle_manager.get_latest_jpeg(camera_id)
+    if live_jpeg:
+        return Response(content=live_jpeg, media_type="image/jpeg")
+
+    # Fallback minimal 1x1 pixel valid JPEG bytes
     dummy_jpeg = b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.\' ",#\x1c\x1c(7),01444\x1f\'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9'
     return Response(content=dummy_jpeg, media_type="image/jpeg")
