@@ -1,0 +1,17 @@
+{
+  "event_id": "evt_a84c2f10-9134-4b5c-a1b7-6e01a239f88c",
+  "camera_id": "cam_01",
+  "type": "DENSITY_HIGH",
+  "severity": "warning",
+  "status": "new",
+  "occurred_at": "2026-10-25T17:30:12.530Z",
+  "confidence": 0.78,
+  "evidence": {
+    "roi_id": "platform_a",
+    "track_count": 31,
+    "density_score": 0.78,
+    "rule_version": "station-a-v1"
+  },
+  "acknowledged_at": null,
+  "resolved_at": null
+}

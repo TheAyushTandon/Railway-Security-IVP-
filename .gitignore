@@ -1,0 +1,42 @@
+﻿# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.class
+*.so
+
+# Environments
+.venv/
+venv/
+
+# Project Data & Models
+data/
+outputs/
+runs/
+*.pt
+*.onnx
+*.engine
+*.mp4
+*.avi
+*.mkv
+
+# SQLite DB
+*.db
+*.sqlite
+*.sqlite3
+
+# Node / Frontend
+node_modules/
+.next/
+dist/
+out/
+build/
+
+# Secrets
+.env
+.env.local
+.env.*.local
+*.local
+
+# OS Generated
+.DS_Store
+Thumbs.db

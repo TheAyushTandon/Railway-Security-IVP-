@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "camera_id": "cam_01",
+  "sampled_at": "2026-10-25T17:30:12.472Z",
+  "visible_detection_count": 18,
+  "active_track_count": 15,
+  "roi_counts": {
+    "platform_a": 11,
+    "stairs": 4
+  },
+  "density": {
+    "class": "HIGH",
+    "score": 0.78,
+    "thresholds_version": "station-a-v1"
+  },
+  "inference_ms": 18.4,
+  "pipeline_ms": 61.2,
+  "sample_age_ms": 74
+}

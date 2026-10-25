@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "camera_id": "cam_01",
+  "frame_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "captured_at": "2026-10-25T17:30:12.472Z",
+  "sample_bucket_start": "2026-10-25T17:30:12.000Z",
+  "sample_offset_ms": 472,
+  "frame_width": 1920,
+  "frame_height": 1080,
+  "model_name": "yolo26n-metro-v1",
+  "inference_ms": 18.4,
+  "detections": [
+    {
+      "class_name": "person",
+      "confidence": 0.91,
+      "bbox_norm": [0.20, 0.14, 0.31, 0.73]
+    },
+    {
+      "class_name": "person",
+      "confidence": 0.88,
+      "bbox_norm": [0.55, 0.22, 0.65, 0.80]
+    }
+  ]
+}
