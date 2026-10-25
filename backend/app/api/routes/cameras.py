@@ -33,7 +33,7 @@ _cameras_store: Dict[str, dict] = {
     "cam_01": {
         "camera_id": "cam_01",
         "name": "Platform A - North Concourse",
-        "source_ref": "data/sample_platform.mp4",
+        "source_ref": "data/japan_subway.webm",
         "status": "STOPPED",
         "last_sampled_at": None,
         "sample_age_ms": None
