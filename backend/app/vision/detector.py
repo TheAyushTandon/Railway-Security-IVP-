@@ -24,19 +24,39 @@ class DetectorService:
         self._load_model()
 
     def _load_model(self):
-        if not self.model_path:
-            logger.info("Detector initialized in mock/standalone mode (no weights path provided).")
-            return
+        from pathlib import Path
+        candidate_paths = []
+        if self.model_path:
+            candidate_paths.append(self.model_path)
 
-        try:
-            from ultralytics import YOLO
-            import torch
-            device = 0 if torch.cuda.is_available() else "cpu"
-            self.model = YOLO(self.model_path)
-            logger.info(f"Loaded YOLO detector from '{self.model_path}' on device '{device}'.")
-        except Exception as e:
-            logger.warning(f"Could not load YOLO model ({e}). Using mock detector fallback.")
-            self.model = None
+        # Check fine-tuned checkpoint first
+        custom_weights = Path(__file__).resolve().parent.parent.parent.parent / "outputs" / "models" / "yolo_metro_best.pt"
+        if custom_weights.exists():
+            candidate_paths.append(str(custom_weights))
+
+        # Check base YOLO weights in repo root or working dir
+        repo_root = Path(__file__).resolve().parent.parent.parent.parent
+        for w in ["yolo26n.pt", "yolo11n.pt", "yolov8n.pt"]:
+            cand = repo_root / w
+            if cand.exists():
+                candidate_paths.append(str(cand))
+            else:
+                candidate_paths.append(w)
+
+        for p in candidate_paths:
+            try:
+                from ultralytics import YOLO
+                import torch
+                device = 0 if torch.cuda.is_available() else "cpu"
+                self.model = YOLO(p)
+                self.model_path = p
+                logger.info(f"Loaded YOLO detector from '{p}' on device '{device}'.")
+                return
+            except Exception as e:
+                logger.debug(f"Could not load '{p}' ({e}). Checking next candidate...")
+
+        logger.info("Detector initialized in mock fallback mode (no YOLO weights found).")
+        self.model = None
 
     def detect(
         self,

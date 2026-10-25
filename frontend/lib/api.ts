@@ -46,6 +46,9 @@ export const api = {
   getCameraFrameUrl: (cameraId: string, cacheBust?: number) =>
     `${API_BASE}/api/v1/cameras/${cameraId}/frame.jpg${cacheBust ? `?t=${cacheBust}` : ""}`,
 
+  getCameraLiveStreamUrl: (cameraId: string) =>
+    `${API_BASE}/api/v1/cameras/${cameraId}/live_stream`,
+
   getEvents: (params?: { camera_id?: string; type?: string; severity?: string; limit?: number }) => {
     const searchParams = new URLSearchParams();
     if (params?.camera_id) searchParams.set("camera_id", params.camera_id);

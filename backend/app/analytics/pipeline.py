@@ -6,6 +6,7 @@ import numpy as np
 
 from app.vision.detector import DetectorService
 from app.vision.detection_schema import DetectionBatch, AnalyticsSnapshot, AlertEvent, DensityInfo
+from app.vision.annotator import render_ai_overlay
 from app.tracking.tracker_service import TrackerService, TrackState
 from app.analytics.counting import CountingService
 from app.analytics.density import DensityService
@@ -42,6 +43,10 @@ class PipelineOrchestrator:
         self._roi_polygons: Dict[str, Dict[str, List[Tuple[float, float]]]] = {}
         self._hazard_polygons: Dict[str, Dict[str, List[Tuple[float, float]]]] = {}
         self._loiter_polygons: Dict[str, Dict[str, List[Tuple[float, float]]]] = {}
+        self._latest_annotated_frames: Dict[str, np.ndarray] = {}
+
+    def get_annotated_frame(self, camera_id: str) -> Optional[np.ndarray]:
+        return self._latest_annotated_frames.get(camera_id)
 
     def configure_camera_rois(
         self,
@@ -155,5 +160,18 @@ class PipelineOrchestrator:
                 )
         except Exception as e:
             logger.error(f"Persistence error: {e}")
+
+        # Render visual overlay with bounding boxes, yellow lines, and alerts
+        try:
+            intrusion_active = any(a.type == "platform_intrusion" for a in alerts)
+            self._latest_annotated_frames[camera_id] = render_ai_overlay(
+                frame,
+                batch.detections,
+                tracks,
+                intrusion_active=intrusion_active
+            )
+        except Exception as e:
+            logger.warning(f"Failed to render AI overlay: {e}")
+            self._latest_annotated_frames[camera_id] = frame
 
         return snapshot, alerts

@@ -127,33 +127,25 @@ function CameraDetailContent({
           <div className="p-3 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-300 flex items-center gap-2">
               <Radio className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-              <span>LIVE VIDEO PREVIEW (30 FPS)</span>
+              <span>LIVE VIDEO PREVIEW (25 FPS)</span>
             </span>
-            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-              Source Playback
+            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${
+              camera?.status === "ANALYSIS_ACTIVE"
+                ? "bg-emerald-950 text-emerald-300 border-emerald-800"
+                : "bg-slate-800 text-slate-400 border-slate-700"
+            }`}>
+              {camera?.status === "ANALYSIS_ACTIVE" ? "LIVE STREAMING" : "STANDBY"}
             </span>
           </div>
 
           <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden">
-            <video
-              src="/sample_platform.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = "none";
-              }}
-            />
-            {/* Fallback frame preview */}
             <img
-              src={api.getCameraFrameUrl(cameraId, frameTimestamp)}
-              alt="Live feed"
+              src={api.getCameraLiveStreamUrl(cameraId)}
+              alt="Live Continuous Feed"
               className="w-full h-full object-cover"
             />
             <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 backdrop-blur rounded text-[11px] font-mono text-emerald-400 border border-emerald-500/30">
-              ● LIVE DECODE FEED
+              ● {camera?.status === "ANALYSIS_ACTIVE" ? "LIVE DECODE FEED (25 FPS)" : "FEED STANDBY"}
             </div>
           </div>
           <div className="p-3 text-[11px] text-slate-400 bg-slate-900/40">

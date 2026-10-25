@@ -1,6 +1,10 @@
+import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+import cv2
+import numpy as np
 from fastapi import APIRouter, HTTPException, status, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.vision.detection_schema import AnalyticsSnapshot, DensityInfo
@@ -138,9 +142,59 @@ def get_camera_snapshot(camera_id: str):
     )
 
 
+def _generate_standby_frame(title: str = "METRO CCTV - STANDBY", subtitle: str = "Click 'Start Ingest & Sampling' to activate feed") -> np.ndarray:
+    img = np.zeros((360, 640, 3), dtype=np.uint8)
+    img[:] = (18, 22, 28)
+    # Slate border
+    cv2.rectangle(img, (12, 12), (628, 348), (35, 45, 58), 2)
+    # Center camera icon
+    cv2.circle(img, (320, 140), 38, (28, 38, 50), -1)
+    cv2.circle(img, (320, 140), 38, (60, 110, 160), 2)
+    cv2.circle(img, (320, 140), 14, (80, 170, 240), -1)
+    # Header & Subtext
+    cv2.putText(img, title, (200, 218), cv2.FONT_HERSHEY_DUPLEX, 0.70, (230, 240, 250), 2, cv2.LINE_AA)
+    cv2.putText(img, subtitle, (125, 255), cv2.FONT_HERSHEY_SIMPLEX, 0.44, (120, 145, 170), 1, cv2.LINE_AA)
+    return img
+
+
+@router.get("/{camera_id}/live_stream")
+def get_camera_live_stream(camera_id: str):
+    """
+    Continuous MJPEG video stream (25 FPS) for real-time CCTV preview.
+    Directly decodes and streams without blocking 1 Hz model inferences.
+    """
+    if camera_id not in _cameras_store:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Camera '{camera_id}' not found."
+        )
+
+    def frame_stream():
+        while True:
+            worker = lifecycle_manager.workers.get(camera_id)
+            if worker and worker.status == "CONNECTED":
+                frame, _, _, _ = worker.get_latest_frame()
+                if frame is not None:
+                    ret, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    if ret:
+                        yield (b"--frame\r\n"
+                               b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n")
+                        time.sleep(0.04) # ~25 FPS
+                        continue
+            # When camera is paused or stopped, send standby graphic
+            standby = _generate_standby_frame("STANDBY FEED", "Click 'Start Ingest & Sampling' to activate stream")
+            ret, buffer = cv2.imencode(".jpg", standby)
+            if ret:
+                yield (b"--frame\r\n"
+                       b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n")
+            time.sleep(0.5)
+
+    return StreamingResponse(frame_stream(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
 @router.get("/{camera_id}/frame.jpg")
 def get_camera_frame(camera_id: str):
-    """Returns the most recently analyzed frame JPEG image."""
+    """Returns the most recently analyzed frame JPEG image with AI annotations."""
     if camera_id not in _cameras_store:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -151,6 +205,11 @@ def get_camera_frame(camera_id: str):
     if live_jpeg:
         return Response(content=live_jpeg, media_type="image/jpeg")
 
-    # Fallback minimal 1x1 pixel valid JPEG bytes
+    # Fallback to high-definition standby frame
+    standby = _generate_standby_frame("AI ANALYZER STANDBY", "Waiting for camera ingest & 1 Hz sampling")
+    ret, buffer = cv2.imencode(".jpg", standby)
+    if ret:
+        return Response(content=buffer.tobytes(), media_type="image/jpeg")
+
     dummy_jpeg = b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.\' ",#\x1c\x1c(7),01444\x1f\'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9'
     return Response(content=dummy_jpeg, media_type="image/jpeg")

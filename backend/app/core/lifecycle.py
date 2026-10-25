@@ -119,8 +119,10 @@ class CameraLifecycleManager:
                         # Update cache for REST queries
                         self.latest_snapshots[camera_id] = snapshot
 
-                        # Cache JPEG bytes for GET /frame.jpg
-                        ret, buffer = cv2.imencode(".jpg", decision.frame_data)
+                        # Cache JPEG bytes for GET /frame.jpg (preferring visual AI overlay)
+                        annotated = self.orchestrator.get_annotated_frame(camera_id)
+                        target_frame = annotated if annotated is not None else decision.frame_data
+                        ret, buffer = cv2.imencode(".jpg", target_frame)
                         if ret:
                             self.latest_jpeg_frames[camera_id] = buffer.tobytes()
 
