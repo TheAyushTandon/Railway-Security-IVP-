@@ -17,11 +17,13 @@ class DetectorService:
     Falls back gracefully to mock detections when weights are not yet present.
     """
 
-    def __init__(self, model_path: Optional[str] = None, conf_threshold: float = 0.40):
+    def __init__(self, model_path: Optional[str] = None, conf_threshold: float = 0.40, mock_mode: bool = False):
         self.model_path = model_path
         self.conf_threshold = conf_threshold
+        self.mock_mode = mock_mode or (model_path == "mock")
         self.model = None
-        self._load_model()
+        if not self.mock_mode:
+            self._load_model()
 
     def _load_model(self):
         from pathlib import Path

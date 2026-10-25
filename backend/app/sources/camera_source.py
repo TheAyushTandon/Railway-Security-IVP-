@@ -77,7 +77,7 @@ class CameraSourceWorker:
                 ret, frame = cap.read()
                 if not ret or frame is None:
                     # End of file or network stream drop
-                    if isinstance(src, str) and (src.endswith(".mp4") or src.endswith(".avi") or src.endswith(".mkv")):
+                    if isinstance(src, str) and any(src.lower().endswith(ext) for ext in [".mp4", ".avi", ".mkv", ".webm"]):
                         # Loop video for continuous playback in prototype
                         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                         continue

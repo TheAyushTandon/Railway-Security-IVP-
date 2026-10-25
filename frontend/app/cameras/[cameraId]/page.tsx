@@ -26,11 +26,14 @@ function CameraDetailContent({
   const { cameraId } = use(params);
   const [camera, setCamera] = useState<CameraRecord | null>(null);
   const [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null);
-  const [frameTimestamp, setFrameTimestamp] = useState<number>(Date.now());
+  const [frameTimestamp, setFrameTimestamp] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     // 1. Initial REST fetch
+    setFrameTimestamp(Date.now());
     api.getCamera(cameraId).then(setCamera).catch(console.error);
     api.getCameraSnapshot(cameraId).then(setSnapshot).catch(console.error);
 
@@ -167,9 +170,10 @@ function CameraDetailContent({
 
           <div className="relative aspect-video bg-slate-950 flex items-center justify-center overflow-hidden">
             <img
-              src={api.getCameraFrameUrl(cameraId, frameTimestamp)}
+              src={api.getCameraFrameUrl(cameraId, mounted && frameTimestamp > 0 ? frameTimestamp : undefined)}
               alt="AI Analyzed Frame"
               className="w-full h-full object-cover"
+              suppressHydrationWarning
             />
             {/* Timestamp Badge */}
             <div className="absolute top-2 right-2 px-2 py-1 bg-black/75 backdrop-blur rounded text-[11px] font-mono text-cyan-300 border border-cyan-800">

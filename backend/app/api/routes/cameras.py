@@ -37,6 +37,14 @@ _cameras_store: Dict[str, dict] = {
         "status": "STOPPED",
         "last_sampled_at": None,
         "sample_age_ms": None
+    },
+    "cam_02": {
+        "camera_id": "cam_02",
+        "name": "Platform B - Transit Corridor",
+        "source_ref": "data/lisboa_metro.webm",
+        "status": "STOPPED",
+        "last_sampled_at": None,
+        "sample_age_ms": None
     }
 }
 

@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import numpy as np
 
 from app.analytics.pipeline import PipelineOrchestrator
+from app.vision.detector import DetectorService
 from app.storage.repository import Repository
 
 
@@ -10,7 +11,7 @@ def test_full_pipeline_e2e(tmp_path):
     db_file = tmp_path / "test_metro.db"
     repo = Repository(db_url=f"sqlite:///{db_file}")
 
-    orchestrator = PipelineOrchestrator(repository=repo)
+    orchestrator = PipelineOrchestrator(repository=repo, detector=DetectorService(mock_mode=True))
 
     # Configure ROIs: waiting area and yellow safety line
     orchestrator.configure_camera_rois(

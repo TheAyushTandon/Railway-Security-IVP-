@@ -34,8 +34,10 @@ LABELS_TRAIN = METRO_DIR / "labels" / "train"
 LABELS_VAL = METRO_DIR / "labels" / "val"
 
 
-def setup_directories():
+def setup_directories(clean: bool = False):
     for d in [IMAGES_TRAIN, IMAGES_VAL, LABELS_TRAIN, LABELS_VAL]:
+        if clean and d.exists():
+            shutil.rmtree(d)
         d.mkdir(parents=True, exist_ok=True)
 
 
@@ -101,73 +103,88 @@ def convert_voc_xml_to_yolo(xml_file: Path, img_w: int, img_h: int) -> list[str]
 
 def generate_platform_baseline_dataset():
     """
-    Extracts frames from data/sample_platform.mp4 to create an immediate,
-    working baseline train/val dataset if full Figshare download is still pending.
+    Extracts frames from real metro platform surveillance videos (e.g. data/sample_platform.mp4, data/lisboa_metro.webm)
+    and labels passengers using YOLO detection to create real training/validation datasets with seed 42.
     """
-    video_path = DATA_DIR / "sample_platform.mp4"
-    if not video_path.exists():
-        print(f"[Dataset] Error: {video_path} not found.")
+    video_paths = [
+        DATA_DIR / "sample_platform.mp4",
+        DATA_DIR / "metro_platform.mp4",
+        DATA_DIR / "lisboa_metro.webm",
+    ]
+    # Unique existing videos
+    existing_videos = []
+    seen = set()
+    for p in video_paths:
+        if p.exists() and p.name not in seen:
+            existing_videos.append(p)
+            seen.add(p.name)
+
+    if not existing_videos:
+        print(f"[Dataset] Error: No surveillance videos found in {DATA_DIR}.")
         return
 
-    print(f"[Dataset] Extracting video frames from {video_path} for baseline calibration...")
-    cap = cv2.VideoCapture(str(video_path))
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # Load YOLO for pseudo-labeling / ground truth generation on real frames
+    yolo_model = None
+    try:
+        from ultralytics import YOLO
+        for m in ["yolo11n.pt", "yolov8n.pt"]:
+            cand = BASE_DIR / m
+            if cand.exists() or Path(m).exists():
+                yolo_model = YOLO(str(cand) if cand.exists() else m)
+                print(f"[Dataset] Initialized {m} for real frame passenger labeling.")
+                break
+    except Exception as e:
+        print(f"[Dataset] Note: Ultralytics YOLO not loaded ({e}), using default bounds.")
 
-    # Sample 60 evenly spaced frames
-    indices = np.linspace(0, total_frames - 1, 60, dtype=int)
     frames_extracted = []
-
-    for idx in indices:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-        ret, frame = cap.read()
-        if not ret:
+    for vid_p in existing_videos:
+        cap = cv2.VideoCapture(str(vid_p))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total_frames <= 0:
+            cap.release()
             continue
-        frames_extracted.append((idx, frame))
+        sample_count = min(40, total_frames)
+        indices = np.linspace(10, total_frames - 10, sample_count, dtype=int)
+        for idx in indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                continue
+            frames_extracted.append((vid_p.stem, idx, frame))
+        cap.release()
 
-    cap.release()
-    print(f"[Dataset] Extracted {len(frames_extracted)} high-definition frames.")
+    print(f"[Dataset] Extracted {len(frames_extracted)} real surveillance frames across {len(existing_videos)} videos.")
 
-    # Shuffle with fixed seed 42
     random.shuffle(frames_extracted)
     split_idx = int(len(frames_extracted) * 0.8)
     train_frames = frames_extracted[:split_idx]
     val_frames = frames_extracted[split_idx:]
 
     def save_split(frames, img_dir: Path, lbl_dir: Path, split_name: str):
-        for f_idx, frame in frames:
-            img_name = f"metro_frame_{f_idx:04d}.jpg"
-            lbl_name = f"metro_frame_{f_idx:04d}.txt"
+        total_labels = 0
+        for src_name, f_idx, frame in frames:
+            img_name = f"{src_name}_f{f_idx:04d}.jpg"
+            lbl_name = f"{src_name}_f{f_idx:04d}.txt"
             cv2.imwrite(str(img_dir / img_name), frame)
 
-            # Simulated passenger ground truth bounding boxes in normalized coordinates
-            # Passenger 1 (walking right)
-            p1_cx = 0.20 + (f_idx / total_frames) * 0.25
-            p1_cy = 0.52
-            p1_w, p1_h = 0.08, 0.44
-
-            # Passenger 2 (near yellow safety line)
-            p2_cx = 0.52 + np.sin(f_idx / 10.0) * 0.04
-            p2_cy = 0.55
-            p2_w, p2_h = 0.09, 0.46
-
-            # Passenger 3 (loitering near edge)
-            p3_cx = 0.76
-            p3_cy = 0.50
-            p3_w, p3_h = 0.07, 0.42
-
-            boxes = [
-                f"0 {p1_cx:.4f} {p1_cy:.4f} {p1_w:.4f} {p1_h:.4f}",
-                f"0 {p2_cx:.4f} {p2_cy:.4f} {p2_w:.4f} {p2_h:.4f}",
-                f"0 {p3_cx:.4f} {p3_cy:.4f} {p3_w:.4f} {p3_h:.4f}",
-            ]
+            boxes = []
+            if yolo_model is not None:
+                res = yolo_model(frame, conf=0.30, verbose=False)[0]
+                for b in res.boxes:
+                    cls_id = int(b.cls[0])
+                    if yolo_model.names.get(cls_id) == "person":
+                        xywhn = b.xywhn[0].tolist()
+                        boxes.append(f"0 {xywhn[0]:.6f} {xywhn[1]:.6f} {xywhn[2]:.6f} {xywhn[3]:.6f}")
 
             with open(lbl_dir / lbl_name, "w") as f:
-                f.write("\n".join(boxes) + "\n")
+                if boxes:
+                    f.write("\n".join(boxes) + "\n")
+                    total_labels += len(boxes)
+                else:
+                    # Negative background frame (empty platform)
+                    f.write("")
 
-        print(f"[Dataset] Saved {len(frames)} images & labels to {split_name}.")
+        print(f"[Dataset] Saved {len(frames)} real images ({total_labels} passenger annotations) to {split_name}.")
 
     save_split(train_frames, IMAGES_TRAIN, LABELS_TRAIN, "train")
     save_split(val_frames, IMAGES_VAL, LABELS_VAL, "val")
@@ -200,7 +217,7 @@ def main():
     print(f"Seed: {RANDOM_SEED} | Target: {METRO_DIR}")
     print("=" * 60)
 
-    setup_directories()
+    setup_directories(clean=True)
 
     archive = find_metro_archive()
     if archive:
